@@ -41,11 +41,38 @@ app.config["MAX_CONTENT_LENGTH"] = 10 * 1024 * 1024  # 10 MB
 # "confirma que no eres un bot", vuelve a exportar el archivo.
 COOKIES_FILE = os.environ.get("COOKIES_FILE", "cookies.txt")
 
-# Cuántas descargas simultáneas permitir. Con 1, los videos se
-# procesan como una cola: uno a la vez, en el orden en que se
-# ingresaron. Súbelo (2-4) solo si corres esto en una máquina
-# con recursos de sobra (no en el free tier de Render, con solo
-# 512 MB de RAM y 0.1 CPU).
+
+def _prepare_writable_cookiefile(source_path):
+    """
+    yt-dlp reescribe el archivo de cookies después de cada descarga
+    (para guardar cookies de sesión que YouTube va rotando). En Render,
+    los "Secret Files" se montan como solo lectura (/etc/secrets/...),
+    así que si apuntamos yt-dlp directo ahí, falla al intentar guardar
+    y la descarga se cae. Por eso copiamos el archivo a una carpeta
+    temporal escribible al iniciar el servidor, y usamos esa copia.
+    """
+    if not source_path or not Path(source_path).exists():
+        return None
+
+    writable_path = Path(tempfile.gettempdir()) / "cookies_writable.txt"
+
+    try:
+        shutil.copyfile(source_path, writable_path)
+        return str(writable_path)
+    except Exception as error:
+        print(
+            f"No se pudo copiar el archivo de cookies a una ruta "
+            f"escribible: {error}",
+            flush=True,
+        )
+        return source_path
+
+
+# Ruta que realmente usa yt-dlp (copia escribible), distinta de
+# COOKIES_FILE (la fuente original, que puede ser de solo lectura).
+ACTIVE_COOKIES_FILE = _prepare_writable_cookiefile(COOKIES_FILE)
+
+
 MAX_CONCURRENT_DOWNLOADS = int(os.environ.get("MAX_CONCURRENT_DOWNLOADS", 1))
 
 # Usuario/clave simples para poder exponer la app a internet
@@ -287,6 +314,13 @@ def friendly_download_error(error):
             "residencial, o espera e intenta de nuevo más tarde."
         )
 
+    if "read-only file system" in lower and "cookie" in lower:
+        return (
+            "No se pudo escribir el archivo de cookies (sistema de solo "
+            "lectura). Si esto persiste, revisa que COOKIES_FILE apunte "
+            "a la copia temporal editable, no directo al secret file."
+        )
+
     if "no such file" in lower and "cookie" in lower:
         return (
             f"No se encontró el archivo de cookies ({COOKIES_FILE}). "
@@ -434,8 +468,8 @@ def common_ydl_options(output_folder, progress_hook, postprocessor_hook):
         },
     }
 
-    if COOKIES_FILE and Path(COOKIES_FILE).exists():
-        options["cookiefile"] = COOKIES_FILE
+    if ACTIVE_COOKIES_FILE and Path(ACTIVE_COOKIES_FILE).exists():
+        options["cookiefile"] = ACTIVE_COOKIES_FILE
 
     if YTDLP_PROXY:
         options["proxy"] = YTDLP_PROXY
