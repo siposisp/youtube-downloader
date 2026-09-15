@@ -41,10 +41,12 @@ app.config["MAX_CONTENT_LENGTH"] = 10 * 1024 * 1024  # 10 MB
 # "confirma que no eres un bot", vuelve a exportar el archivo.
 COOKIES_FILE = os.environ.get("COOKIES_FILE", "cookies.txt")
 
-# Cuántas descargas simultáneas permitir. Súbelo con cuidado:
-# cada una consume CPU (conversión/mux) y ancho de banda; un
-# valor entre 2 y 4 suele ser el punto justo para uso doméstico.
-MAX_CONCURRENT_DOWNLOADS = int(os.environ.get("MAX_CONCURRENT_DOWNLOADS", 3))
+# Cuántas descargas simultáneas permitir. Con 1, los videos se
+# procesan como una cola: uno a la vez, en el orden en que se
+# ingresaron. Súbelo (2-4) solo si corres esto en una máquina
+# con recursos de sobra (no en el free tier de Render, con solo
+# 512 MB de RAM y 0.1 CPU).
+MAX_CONCURRENT_DOWNLOADS = int(os.environ.get("MAX_CONCURRENT_DOWNLOADS", 1))
 
 # Usuario/clave simples para poder exponer la app a internet
 # sin que cualquiera con la URL pueda usarla. Defínelos como
@@ -445,7 +447,11 @@ def download_video(url, output_folder, progress_hook, postprocessor_hook):
 
 
 # =========================================================
-# PROCESAR TRABAJO (descargas en paralelo)
+# PROCESAR TRABAJO (cola de descargas)
+#
+# Se procesan de a MAX_CONCURRENT_DOWNLOADS a la vez. Con el
+# default de 1, es una cola secuencial pura: cada video espera
+# a que termine el anterior.
 # =========================================================
 
 def _download_one(job_id, index, url, download_type, output_folder):
