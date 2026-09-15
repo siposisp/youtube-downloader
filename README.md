@@ -1,140 +1,378 @@
-# Descargador de YouTube
+# YouTube Downloader
 
-Aplicación web personal para descargar videos o audio de YouTube en lote,
-a partir de enlaces pegados directamente o extraídos de un archivo TXT,
-DOCX o XLSX. Procesa las descargas como una cola (una a la vez) y entrega
-el resultado como un archivo único o un ZIP si son varios.
+A Flask web application for downloading YouTube videos or extracting audio from one or multiple links. Links can be pasted directly into the interface or loaded from TXT, DOCX, or XLSX files.
 
-## Características
+The application shows download progress, returns a single file when only one link is processed, and creates a ZIP archive when multiple links are processed.
 
-- Extrae y normaliza enlaces de YouTube (`youtube.com`, `youtu.be`,
-  `shorts`, `music.youtube.com`, etc.) desde texto pegado o desde
-  archivos `.txt`, `.docx` (texto, tablas e hipervínculos) y `.xlsx`
-  (celdas e hipervínculos).
-- Descarga en formato **video (MP4, H.264/AAC)** o **audio (MP3, 320kbps)**.
-- Procesa los enlaces en cola, uno a la vez, con progreso en tiempo real.
-- Empaqueta automáticamente en ZIP cuando hay más de un resultado.
-- Autenticación básica opcional (usuario/clave) para exponerla en internet.
-- Pensada para correr localmente, en tu red local, o desplegada en
-  Render (u otro host compatible con Docker).
+> Use this tool only for content you own, content in the public domain, or content you are authorized to download.
 
-## Requisitos
+## Features
 
-- Python 3.11+
-- [FFmpeg](https://ffmpeg.org/) instalado y disponible en el `PATH`
-  (requerido por yt-dlp para convertir/unir audio y video).
-- [Deno](https://deno.com/) instalado y disponible en el `PATH`
-  (requerido por yt-dlp para resolver el JavaScript de YouTube).
-- Un archivo `cookies.txt` con tu sesión de YouTube exportada (ver abajo).
+- Video downloads using the best quality available to `yt-dlp`.
+- Audio extraction to MP3.
+- Support for one or multiple links.
+- Link input from:
+  - pasted text;
+  - `.txt` files;
+  - `.docx` documents;
+  - `.xlsx` spreadsheets.
+- Automatic YouTube URL normalization.
+- Download progress shown in the web interface.
+- Direct file download when only one result is generated.
+- Automatic `videos.zip` or `audios.zip` creation when multiple results are generated.
+- Configurable download concurrency.
+- Optional HTTP Basic authentication.
+- Optional `cookies.txt` support.
+- Optional proxy support through environment variables.
+- Local Windows execution or Docker deployment.
 
-## Instalación local
+## Tech Stack
 
-```bash
-pip install -r requirements.txt
+- Python
+- Flask
+- yt-dlp
+- FFmpeg
+- Deno
+- python-docx
+- openpyxl
+- Docker
+
+## Project Structure
+
+A typical project layout looks like this:
+
+```text
+youtube-downloader/
+├── app.py
+├── requirements.txt
+├── Dockerfile
+├── .dockerignore
+├── templates/
+│   └── index.html
+└── cookies.txt          # optional; never commit this file
 ```
 
-## Cookies de YouTube
+If the Windows one-click launcher is used, the project can also be distributed like this:
 
-Algunos videos requieren una sesión iniciada para descargarse. Exporta
-tus cookies así:
+```text
+youtube-downloader-launcher/
+├── iniciar.bat
+└── downloader/
+    ├── app.py
+    ├── requirements.txt
+    ├── Dockerfile
+    └── templates/
+        └── index.html
+```
 
-1. Instala la extensión **"Get cookies.txt LOCALLY"** en tu navegador.
-2. Inicia sesión en youtube.com.
-3. Exporta las cookies del sitio y guarda el archivo como `cookies.txt`
-   en la raíz del proyecto (junto a `app.py`).
+## Quick Start on Windows
 
-La sesión expira con el tiempo. Si empiezas a ver errores de "confirma
-que no eres un bot", vuelve a exportar el archivo.
+The recommended option for end users is to use `iniciar.bat`.
 
-> `cookies.txt` nunca debe subirse al repositorio ni a control de
-> versiones — contiene tu sesión de YouTube. Ya está excluido en
-> `.dockerignore`; agrégalo también a tu `.gitignore` si usas git.
+Double-click:
 
-## Variables de entorno
+```text
+iniciar.bat
+```
 
-| Variable                  | Requerida | Descripción                                                                 | Default       |
-|----------------------------|-----------|-------------------------------------------------------------------------------|---------------|
-| `COOKIES_FILE`             | No        | Ruta al archivo de cookies exportado.                                        | `cookies.txt` |
-| `MAX_CONCURRENT_DOWNLOADS` | No        | Descargas simultáneas. Con `1`, se procesa como cola secuencial.             | `1`           |
-| `APP_USERNAME`             | No*       | Usuario para autenticación básica.                                           | —             |
-| `APP_PASSWORD`             | No*       | Clave para autenticación básica.                                             | —             |
-| `PORT`                     | No        | Puerto en el que escucha el servidor (lo inyecta Render automáticamente).    | `5000`        |
+The launcher automatically checks whether the following components are available:
 
-\* Si defines `APP_USERNAME` y `APP_PASSWORD`, la app queda protegida con
-login. Si dejas alguna sin definir, la app queda **sin autenticación**
-— solo recomendable para uso puramente local.
+- Python;
+- FFmpeg;
+- Deno;
+- the `.venv` virtual environment;
+- the dependencies listed in `requirements.txt`.
 
-## Uso local
+Already installed components are not installed again. If `requirements.txt` changes, Python dependencies are updated automatically.
+
+Once setup is complete, the application starts and opens:
+
+```text
+http://127.0.0.1:5000
+```
+
+### Launcher Requirement
+
+The Windows machine must have `winget` available. On modern Windows 10 and Windows 11 installations, it is usually provided through Microsoft's **App Installer**.
+
+## Manual Installation
+
+### 1. Clone the repository
+
+```bash
+git clone https://github.com/siposisp/youtube-downloader.git
+cd youtube-downloader
+```
+
+### 2. Create a virtual environment
+
+Windows:
+
+```cmd
+python -m venv .venv
+.venv\Scripts\activate
+```
+
+Linux/macOS:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+```
+
+### 3. Install Python dependencies
+
+```bash
+python -m pip install -r requirements.txt
+```
+
+### 4. Install FFmpeg
+
+FFmpeg must be available in `PATH`.
+
+On Windows:
+
+```cmd
+winget install --id Gyan.FFmpeg -e
+```
+
+Verify the installation:
+
+```cmd
+ffmpeg -version
+```
+
+### 5. Install Deno
+
+On Windows:
+
+```cmd
+winget install --id DenoLand.Deno -e
+```
+
+Verify the installation:
+
+```cmd
+deno --version
+```
+
+### 6. Run the application
 
 ```bash
 python app.py
 ```
 
-La app queda disponible en `http://localhost:5000`. Al iniciar valida
-que `ffmpeg` y `deno` estén en el `PATH`; si falta alguno, te avisa al
-intentar una descarga.
+Then open:
 
-### Acceso desde otros dispositivos de tu red
-
-El servidor escucha en `0.0.0.0`, así que otros dispositivos en la
-misma red wifi pueden acceder usando la IP local de tu computador
-(ej. `http://192.168.1.X:5000`). Revisa que el firewall permita la
-conexión en redes privadas.
-
-## Despliegue en Render (Docker)
-
-1. Sube el proyecto a un repositorio de GitHub (sin `cookies.txt`).
-2. En Render: **New → Web Service**, conecta el repo, entorno **Docker**,
-   plan **Free**.
-3. En **Environment**, agrega `APP_USERNAME` y `APP_PASSWORD`.
-4. En **Secret Files**, agrega un archivo con path `/app/cookies.txt`
-   con el contenido de tu `cookies.txt` exportado.
-5. Deploy. Render construye la imagen (instala `ffmpeg` y `deno` según
-   el `Dockerfile`) y entrega una URL pública.
-
-**Limitaciones del free tier de Render:** el servicio se suspende tras
-15 minutos de inactividad (la siguiente visita tarda ~30-60s en
-responder), y cuenta con solo 512 MB de RAM / 0.1 CPU — por eso la app
-está configurada para procesar descargas en cola (`MAX_CONCURRENT_DOWNLOADS=1`)
-en vez de en paralelo.
-
-## Estructura del proyecto
-
-```
-.
-├── app.py              # Aplicación Flask (lógica, rutas, cola de descargas)
-├── templates/
-│   └── index.html      # Interfaz web
-├── requirements.txt    # Dependencias de Python
-├── Dockerfile           # Imagen para despliegue (incluye ffmpeg y deno)
-├── .dockerignore
-└── cookies.txt         # Tu sesión de YouTube (NO subir al repo)
+```text
+http://127.0.0.1:5000
 ```
 
-## Formatos de entrada aceptados
+## Usage
 
-- **Enlaces pegados directamente**: cualquier texto que contenga URLs
-  de YouTube; se extraen y normalizan automáticamente.
-- **Archivo `.txt`**: texto plano con enlaces en cualquier parte.
-- **Archivo `.docx`**: enlaces en párrafos, tablas e hipervínculos reales
-  de Word.
-- **Archivo `.xlsx`**: enlaces en el contenido de las celdas o como
-  hipervínculos.
+### Download from pasted links
 
-Tamaño máximo de archivo subido: 10 MB.
+1. Open the application.
+2. Paste one or more YouTube links.
+3. If you enter multiple links, place one link per line.
+4. Choose:
+   - **Video**, or
+   - **Audio MP3**.
+5. Click **Download**.
+6. Wait for the progress bar to finish.
 
-## Solución de problemas
+If only one link is processed, the browser downloads the resulting file directly.
 
-| Síntoma                                            | Causa probable                                                        |
-|-----------------------------------------------------|-------------------------------------------------------------------------|
-| "YouTube solicitó verificar la sesión"               | `cookies.txt` desactualizado o ausente. Vuelve a exportarlo.            |
-| "YouTube limitó temporalmente las solicitudes (429)" | Demasiadas solicitudes seguidas. Espera unos minutos.                   |
-| "FFmpeg no está disponible en PATH"                  | Falta instalar FFmpeg o falta reiniciar la terminal tras instalarlo.    |
-| "Falta un runtime JavaScript compatible"             | Falta instalar Deno o falta reiniciarlo en el `PATH`.                   |
-| La app tarda ~1 min en responder tras un rato sin uso | Comportamiento normal del free tier de Render (spin down).             |
+If multiple links are processed, the application creates:
 
-## Nota legal
+```text
+videos.zip
+```
 
-Descargar contenido de YouTube puede estar sujeto a los Términos de
-Servicio de la plataforma. Esta herramienta está pensada para uso
-personal.
+or:
+
+```text
+audios.zip
+```
+
+depending on the selected format.
+
+### Download from a file
+
+You can also upload:
+
+```text
+.txt
+.docx
+.xlsx
+```
+
+The application automatically extracts supported YouTube links from the file.
+
+The maximum upload size for the input file is 10 MB.
+
+## Video Quality
+
+The application should allow `yt-dlp` to select the best available video stream and best available audio stream, then merge them using FFmpeg.
+
+The actual maximum quality depends on the formats YouTube exposes for a specific video, the active session, the YouTube client selected by `yt-dlp`, and current platform restrictions.
+
+To inspect the formats available for a video:
+
+```bash
+python -m yt_dlp -F "VIDEO_URL"
+```
+
+If you use cookies:
+
+```bash
+python -m yt_dlp --cookies cookies.txt -F "VIDEO_URL"
+```
+
+If 1080p, 1440p, or 2160p formats appear in the list but the application downloads a lower resolution, review the `format` configuration inside `download_video()`.
+
+If high-resolution formats do not appear in `-F`, the limitation happens before FFmpeg processing: those formats are not being exposed to `yt-dlp` for that session.
+
+A recommended format selector for maximum available quality is:
+
+```python
+"format": "bv*+ba/b"
+```
+
+This lets `yt-dlp` prioritize the best available video and audio streams without forcing a specific codec or container before quality selection.
+
+> Higher resolutions may use VP9 or AV1 instead of H.264. These codecs preserve the original available quality but may not be supported by older media players.
+
+## YouTube Cookies
+
+Some content may require authentication.
+
+The application supports a Netscape-format cookie file:
+
+```text
+cookies.txt
+```
+
+By default, the project looks for it in the project root.
+
+You can define a different path with:
+
+```text
+COOKIES_FILE
+```
+
+> **Important:** `cookies.txt` contains session information. Never commit it to GitHub or distribute it with the project.
+
+Add this to `.gitignore`:
+
+```gitignore
+cookies.txt
+.venv/
+__pycache__/
+*.pyc
+```
+
+## Environment Variables
+
+| Variable | Description | Default |
+|---|---|---|
+| `COOKIES_FILE` | Path to the cookies file | `cookies.txt` |
+| `MAX_CONCURRENT_DOWNLOADS` | Maximum number of simultaneous downloads | `1` |
+| `APP_USERNAME` | HTTP Basic authentication username | unset |
+| `APP_PASSWORD` | HTTP Basic authentication password | unset |
+| `YTDLP_PROXY` | Optional proxy used by yt-dlp | unset |
+| `PORT` | Flask HTTP port | `5000` |
+
+If both `APP_USERNAME` and `APP_PASSWORD` are defined, the website requires authentication before use.
+
+## Local Network Access
+
+The application listens on:
+
+```text
+0.0.0.0
+```
+
+This allows other devices on the same local network to access it using the host computer's local IP address:
+
+```text
+http://192.168.1.X:5000
+```
+
+You may need to allow Python or port `5000` through Windows Firewall.
+
+## Docker
+
+The repository includes a `Dockerfile`.
+
+Build the image:
+
+```bash
+docker build -t youtube-downloader .
+```
+
+Run it:
+
+```bash
+docker run --rm -p 5000:5000 youtube-downloader
+```
+
+Then open:
+
+```text
+http://localhost:5000
+```
+
+For public deployments, use authentication and manage cookies through secrets. Never bake session cookies or passwords into the Docker image or repository.
+
+## Troubleshooting
+
+### `FFmpeg is not available in PATH`
+
+Check:
+
+```bash
+ffmpeg -version
+```
+
+If FFmpeg was just installed, close and reopen the terminal.
+
+### `Deno is not available in PATH`
+
+Check:
+
+```bash
+deno --version
+```
+
+### `HTTP Error 429: Too Many Requests`
+
+YouTube is temporarily rate-limiting requests. Reduce the number of simultaneous downloads and try again later.
+
+### `Sign in to confirm you're not a bot`
+
+The session may require authentication, or the cookies may have expired. If you use `cookies.txt`, export a new valid session.
+
+### Video downloads at low resolution
+
+First inspect the formats visible to `yt-dlp`:
+
+```bash
+python -m yt_dlp -F "VIDEO_URL"
+```
+
+If high-resolution formats are listed, check the application's format selector.
+
+If they are not listed, the quality limitation is upstream of the application and FFmpeg cannot recreate a higher-resolution source.
+
+## Security
+
+- Never commit `cookies.txt`.
+- Never hard-code passwords into the source code.
+- Use environment variables for credentials.
+- Do not run Flask with `debug=True` on a public server.
+- Protect the application with authentication when exposing it to the Internet.
+
+## License and Usage
+
+This project is intended for personal and educational use. Users are responsible for complying with copyright law, platform terms of service, and any other applicable regulations.

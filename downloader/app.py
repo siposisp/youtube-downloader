@@ -450,32 +450,41 @@ def create_postprocessor_hook(job_id, index):
 # YT-DLP
 # =========================================================
 
-def common_ydl_options(output_folder, progress_hook, postprocessor_hook):
+def common_ydl_options(
+    output_folder,
+    progress_hook,
+    postprocessor_hook
+):
     options = {
-        "outtmpl": str(output_folder / "%(title)s.%(id)s.%(ext)s"),
+        "outtmpl": str(
+            output_folder / "%(title)s.%(id)s.%(ext)s"
+        ),
+
         "noplaylist": True,
-        "progress_hooks": [progress_hook],
-        "postprocessor_hooks": [postprocessor_hook],
+
+        "progress_hooks": [
+            progress_hook
+        ],
+
+        "postprocessor_hooks": [
+            postprocessor_hook
+        ],
+
         "quiet": True,
         "no_warnings": True,
-        # El cliente "android" de YouTube suele recibir menos
-        # verificaciones anti-bot que el cliente web por defecto,
-        # lo que ayuda cuando se descarga desde una IP de datacenter.
-        "extractor_args": {
-            "youtube": {
-                "player_client": ["android", "web"],
-            }
-        },
     }
 
-    if ACTIVE_COOKIES_FILE and Path(ACTIVE_COOKIES_FILE).exists():
+    if (
+        ACTIVE_COOKIES_FILE
+        and Path(ACTIVE_COOKIES_FILE).exists()
+    ):
         options["cookiefile"] = ACTIVE_COOKIES_FILE
 
     if YTDLP_PROXY:
         options["proxy"] = YTDLP_PROXY
 
     return options
-
+    
 
 def download_audio(url, output_folder, progress_hook, postprocessor_hook):
     options = common_ydl_options(output_folder, progress_hook, postprocessor_hook)
@@ -495,22 +504,28 @@ def download_audio(url, output_folder, progress_hook, postprocessor_hook):
         ydl.download([url])
 
 
-def download_video(url, output_folder, progress_hook, postprocessor_hook):
-    options = common_ydl_options(output_folder, progress_hook, postprocessor_hook)
+def download_video(
+    url,
+    output_folder,
+    progress_hook,
+    postprocessor_hook
+):
+    options = common_ydl_options(
+        output_folder,
+        progress_hook,
+        postprocessor_hook
+    )
 
     options.update({
-        "format": (
-            "bestvideo[ext=mp4][vcodec^=avc1]"
-            "+bestaudio[ext=m4a]"
-            "/best[ext=mp4][vcodec^=avc1]"
-        ),
+        "format": "bv*+ba/b",
+
         "merge_output_format": "mp4",
     })
 
     with yt_dlp.YoutubeDL(options) as ydl:
         ydl.download([url])
 
-
+        
 # =========================================================
 # PROCESAR TRABAJO (cola de descargas)
 #
