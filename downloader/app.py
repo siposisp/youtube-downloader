@@ -6,6 +6,7 @@ import shutil
 import tempfile
 import threading
 import zipfile
+import subprocess
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from functools import wraps
 from pathlib import Path
@@ -508,22 +509,149 @@ def download_video(
     url,
     output_folder,
     progress_hook,
-    postprocessor_hook
+    postprocessor_hook,
 ):
-    options = common_ydl_options(
-        output_folder,
-        progress_hook,
-        postprocessor_hook
+    # Cada video utiliza una carpeta temporal propia.
+    # Esto evita conflictos si en el futuro hay varias
+    # descargas simultáneas.
+    temp_video_folder = Path(
+        tempfile.mkdtemp(
+            prefix="video_",
+            dir=output_folder,
+        )
     )
 
-    options.update({
-        "format": "bv*+ba/b",
+    try:
+        options = common_ydl_options(
+            temp_video_folder,
+            progress_hook,
+            postprocessor_hook,
+        )
 
-        "merge_output_format": "mp4",
-    })
+        options.update({
+            # Mejor video + mejor audio disponibles.
+            "format": "bv*[height<=1080]+ba/b[height<=1080]",
 
-    with yt_dlp.YoutubeDL(options) as ydl:
-        ydl.download([url])
+            # MKV sirve como contenedor intermedio porque
+            # acepta AV1, VP9, H.264, Opus, AAC, etc.
+            "merge_output_format": "mkv",
+
+            "outtmpl": str(
+                temp_video_folder
+                / "%(title)s.%(id)s.%(ext)s"
+            ),
+        })
+
+        # ================================
+        # DESCARGAR MÁXIMA CALIDAD
+        # ================================
+
+        with yt_dlp.YoutubeDL(options) as ydl:
+            ydl.download([url])
+
+        # Buscar el archivo final generado por yt-dlp.
+        media_extensions = {
+            ".mkv",
+            ".mp4",
+            ".webm",
+            ".mov",
+        }
+
+        candidates = [
+            file
+            for file in temp_video_folder.iterdir()
+            if (
+                file.is_file()
+                and file.suffix.lower() in media_extensions
+            )
+        ]
+
+        if not candidates:
+            raise RuntimeError(
+                "yt-dlp did not generate a video file."
+            )
+
+        # Normalmente solo habrá uno.
+        # Si existieran varios, usamos el mayor.
+        source_file = max(
+            candidates,
+            key=lambda file: file.stat().st_size,
+        )
+
+        output_file = (
+            output_folder
+            / f"{source_file.stem}.mp4"
+        )
+
+        # ================================
+        # CONVERTIR A MP4 COMPATIBLE
+        # ================================
+
+        ffmpeg_command = [
+            "ffmpeg",
+            "-y",
+
+            "-i",
+            str(source_file),
+
+            # Primer stream de video.
+            "-map",
+            "0:v:0",
+
+            # Primer stream de audio si existe.
+            "-map",
+            "0:a:0?",
+
+            # H.264
+            "-c:v",
+            "libx264",
+
+            # Calidad alta.
+            "-crf",
+            "18",
+
+            # Balance calidad / tiempo.
+            "-preset",
+            "medium",
+
+            # Máxima compatibilidad.
+            "-pix_fmt",
+            "yuv420p",
+
+            # AAC
+            "-c:a",
+            "aac",
+
+            "-b:a",
+            "192k",
+
+            # Permite iniciar reproducción antes
+            # de terminar de descargar el archivo.
+            "-movflags",
+            "+faststart",
+
+            str(output_file),
+        ]
+
+        result = subprocess.run(
+            ffmpeg_command,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+
+        if result.returncode != 0:
+            raise RuntimeError(
+                "FFmpeg conversion failed:\n"
+                + result.stderr[-1500:]
+            )
+
+    finally:
+        # Borrar AV1/VP9/intermedios.
+        shutil.rmtree(
+            temp_video_folder,
+            ignore_errors=True,
+        )
 
         
 # =========================================================

@@ -361,6 +361,7 @@ https://youtu.be/..."
             percentage.textContent = progress + "%";
             progressText.textContent = data.message;
 
+
             if (data.status === "finished") {
                 progressBar.style.width = "100%";
                 progressBar.style.background = "#7ee787";
@@ -369,16 +370,21 @@ https://youtu.be/..."
 
                 progressText.className = "progress-text success";
                 progressText.textContent =
-                    data.message + " Iniciando descarga...";
+                    "¡Listo! Descarga preparada correctamente. Iniciando descarga...";
 
                 button.disabled = false;
 
-                /*
-                    Esto llama a /file/<job_id>.
-                    Flask responde con Content-Disposition: attachment,
-                    por eso Chrome lo muestra como una descarga normal.
-                */
-                window.location.href = `/file/${jobId}`;
+                // Crear una descarga real sin abandonar la página.
+                const downloadLink = document.createElement("a");
+
+                downloadLink.href = `/file/${jobId}`;
+                downloadLink.style.display = "none";
+
+                document.body.appendChild(downloadLink);
+
+                downloadLink.click();
+
+                document.body.removeChild(downloadLink);
 
                 return;
             }
