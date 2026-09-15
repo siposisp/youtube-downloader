@@ -58,6 +58,13 @@ MAX_CONCURRENT_DOWNLOADS = int(os.environ.get("MAX_CONCURRENT_DOWNLOADS", 1))
 APP_USERNAME = os.environ.get("APP_USERNAME")
 APP_PASSWORD = os.environ.get("APP_PASSWORD")
 
+# Proxy opcional para las descargas (formato: http://usuario:clave@host:puerto
+# o socks5://host:puerto). Útil cuando el servidor corre en un datacenter
+# (Render, AWS, etc.) y YouTube empieza a bloquear o pedir verificación extra
+# por venir de una IP de nube en vez de una IP residencial. Sin esto definido,
+# las descargas salen directo desde la IP del servidor.
+YTDLP_PROXY = os.environ.get("YTDLP_PROXY")
+
 jobs = {}
 jobs_lock = threading.Lock()
 
@@ -262,9 +269,22 @@ def friendly_download_error(error):
 
     if "sign in to confirm you're not a bot" in lower:
         return (
-            "YouTube solicitó verificar la sesión. "
-            "Vuelve a exportar el archivo cookies.txt con tu sesión "
-            "de YouTube iniciada y vuelve a intentarlo."
+            "YouTube solicitó verificar la sesión. Esto puede ser porque "
+            "cookies.txt expiró (vuelve a exportarlo), o porque YouTube "
+            "está bloqueando la IP del servidor por venir de un datacenter "
+            "(prueba configurando YTDLP_PROXY con un proxy residencial)."
+        )
+
+    if (
+        "http error 403" in lower
+        or "unable to download webpage" in lower
+        or ("blocked" in lower and "ip" in lower)
+    ):
+        return (
+            "YouTube bloqueó la solicitud, probablemente por venir de una "
+            "IP de datacenter (común en hosting en la nube como Render). "
+            "Prueba configurando la variable YTDLP_PROXY con un proxy "
+            "residencial, o espera e intenta de nuevo más tarde."
         )
 
     if "no such file" in lower and "cookie" in lower:
@@ -404,10 +424,21 @@ def common_ydl_options(output_folder, progress_hook, postprocessor_hook):
         "postprocessor_hooks": [postprocessor_hook],
         "quiet": True,
         "no_warnings": True,
+        # El cliente "android" de YouTube suele recibir menos
+        # verificaciones anti-bot que el cliente web por defecto,
+        # lo que ayuda cuando se descarga desde una IP de datacenter.
+        "extractor_args": {
+            "youtube": {
+                "player_client": ["android", "web"],
+            }
+        },
     }
 
     if COOKIES_FILE and Path(COOKIES_FILE).exists():
         options["cookiefile"] = COOKIES_FILE
+
+    if YTDLP_PROXY:
+        options["proxy"] = YTDLP_PROXY
 
     return options
 
@@ -472,12 +503,21 @@ def _download_one(job_id, index, url, download_type, output_folder):
 
     except Exception as error:
         friendly_error = friendly_download_error(error)
-        print(f"Error descargando {url}: {error}")
+        raw_message = str(error).strip().splitlines()[-1] if str(error).strip() else ""
+
+        print(f"Error descargando {url}: {error}", flush=True)
+
+        # Se agrega un fragmento del error real (acotado) para que se
+        # pueda diagnosticar el problema sin tener que entrar a los
+        # logs del servidor.
+        detailed_error = friendly_error
+        if raw_message:
+            detailed_error += f" (detalle: {raw_message[:200]})"
 
         job["items"][index]["status"] = "error"
         job["items"][index]["progress"] = 1.0
-        job["items"][index]["error"] = friendly_error
-        return False, friendly_error
+        job["items"][index]["error"] = detailed_error
+        return False, detailed_error
 
     finally:
         _update_job_progress(job_id)

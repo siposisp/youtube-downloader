@@ -13,6 +13,12 @@ ENV PATH="/usr/local/bin:${PATH}"
 
 WORKDIR /app
 
+# Sin esto, Python almacena en buffer la salida de print() cuando no
+# está conectada a una terminal (como pasa dentro de un contenedor),
+# y los logs de Render se ven "congelados" hasta que el buffer se
+# llena o el proceso termina.
+ENV PYTHONUNBUFFERED=1
+
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
